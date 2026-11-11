@@ -105,7 +105,7 @@ function articleUrl(slug) {
 }
 
 function chip(text, href, active = false) {
-  return `<a href="${href}" class="inline-block px-3 py-1 rounded-full text-xs font-semibold border transition ${active ? 'text-white border-transparent' : ''}" style="${active ? 'background:var(--color-primary)' : 'background:var(--color-surface);color:var(--color-text);border-color:var(--color-border)'}">${escapeHtml(text)}</a>`
+  return `<a href="${href}" class="inline-block whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-semibold border transition hover:opacity-85 ${active ? 'text-white border-transparent' : ''}" style="${active ? 'background:var(--color-primary)' : 'background:var(--color-surface);color:var(--color-text);border-color:var(--color-border)'}">${escapeHtml(text)}</a>`
 }
 
 function difficultyBadge(level) {
@@ -119,32 +119,70 @@ function categoryBadge(category) {
 
 function tagChips(tags) {
   return (tags || [])
-    .map((t) => `<a href="#/tag/${encodeURIComponent(t)}" class="text-xs px-2 py-0.5 rounded-full border hover:opacity-80" style="border-color:var(--color-border);color:var(--color-muted)">#${escapeHtml(t)}</a>`)
-    .join(' ')
+    .map((t) => `<a href="#/tag/${encodeURIComponent(t)}" class="whitespace-nowrap text-xs px-2.5 py-1 rounded-full border hover:opacity-80 transition" style="border-color:var(--color-border);color:var(--color-muted)">#${escapeHtml(t)}</a>`)
+    .join('')
+}
+
+function fallbackImgFor(article) {
+  const letter = ((article.title || 'C').trim().charAt(0) || 'C').toUpperCase()
+  return (
+    "data:image/svg+xml;charset=utf-8," +
+    encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='630'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#2563eb'/><stop offset='1' stop-color='#0f766e'/></linearGradient></defs><rect width='1200' height='630' fill='url(#g)'/><text x='600' y='365' font-size='280' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold' opacity='0.9'>${letter}</text></svg>`,
+    )
+  )
 }
 
 function cardImage(article, cls) {
-  return `<img src="${escapeHtml(article.image || FALLBACK_IMG)}" alt="${escapeHtml(article.imageAlt || article.title)}" loading="lazy" class="${cls}" onerror="this.onerror=null;this.src=window.__WIKI_FALLBACK_IMG__" />`
+  return `<img src="${escapeHtml(article.image || FALLBACK_IMG)}" alt="${escapeHtml(article.imageAlt || article.title)}" loading="lazy" class="${cls}" data-fallback="${fallbackImgFor(article)}" onerror="this.onerror=null;this.src=this.dataset.fallback" />`
 }
 
-function articleCard(article, featured = false) {
-  return `<article class="rounded-2xl overflow-hidden border shadow-sm hover:shadow-lg transition flex flex-col" style="background:var(--color-surface);border-color:var(--color-border)">
-    <a href="${articleUrl(article.slug)}" class="block overflow-hidden">
-      ${cardImage(article, featured ? 'w-full h-64 object-cover hover:scale-105 transition duration-300' : 'w-full h-44 object-cover hover:scale-105 transition duration-300')}
+function articleCard(article) {
+  return `<article class="rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col" style="background:var(--color-surface);border-color:var(--color-border)">
+    <a href="${articleUrl(article.slug)}" class="block overflow-hidden shrink-0">
+      ${cardImage(article, 'w-full aspect-video object-cover hover:scale-105 transition duration-300')}
     </a>
-    <div class="p-5 flex flex-col gap-2 flex-1">
+    <div class="p-5 flex flex-col gap-3 flex-1">
       <div class="flex items-center gap-2 flex-wrap">
         ${categoryBadge(article.category)}
         ${difficultyBadge(article.difficulty)}
-        <span class="text-xs ml-auto" style="color:var(--color-muted)">⏱ ${readingTime(article)}</span>
+        <span class="text-xs ml-auto whitespace-nowrap" style="color:var(--color-muted)">⏱ ${readingTime(article)}</span>
       </div>
       <a href="${articleUrl(article.slug)}"><h3 class="text-lg font-bold leading-snug hover:underline" style="color:var(--color-text)">${escapeHtml(article.title)}</h3></a>
-      <p class="text-sm line-clamp-2" style="color:var(--color-muted)">${escapeHtml(article.subtitle || '')}</p>
-      <div class="flex flex-wrap gap-1.5 mt-1">${tagChips(article.tags)}</div>
-      <div class="mt-auto pt-3 text-xs border-t flex items-center gap-2" style="border-color:var(--color-border);color:var(--color-muted)">
+      <p class="text-sm leading-relaxed line-clamp-2" style="color:var(--color-muted)">${escapeHtml(article.subtitle || '')}</p>
+      <div class="flex flex-wrap gap-2 mt-1">${tagChips(article.tags)}</div>
+      <div class="mt-auto pt-3 text-xs border-t flex items-center gap-2 flex-wrap" style="border-color:var(--color-border);color:var(--color-muted)">
         <span>✍️ ${escapeHtml(article.author || config.defaultAuthor || '')}</span>
-        <span>•</span>
-        <span>${formatDate(article.dateCreated)}</span>
+        <span aria-hidden="true">•</span>
+        <span>📅 ${formatDate(article.dateCreated)}</span>
+      </div>
+    </div>
+  </article>`
+}
+
+function featuredCard(article) {
+  return `<article class="rounded-2xl overflow-hidden border shadow-md hover:shadow-xl transition-shadow duration-300 grid md:grid-cols-2" style="background:var(--color-surface);border-color:var(--color-border)">
+    <a href="${articleUrl(article.slug)}" class="block overflow-hidden">
+      ${cardImage(article, 'w-full h-56 md:h-full md:min-h-72 object-cover hover:scale-105 transition duration-300')}
+    </a>
+    <div class="p-6 md:p-8 flex flex-col gap-3 justify-center">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs font-bold px-2.5 py-1 rounded-full text-white" style="background:var(--color-accent)">⭐ Artikel Pilihan</span>
+        ${categoryBadge(article.category)}
+        ${difficultyBadge(article.difficulty)}
+      </div>
+      <a href="${articleUrl(article.slug)}"><h3 class="text-2xl md:text-3xl font-extrabold leading-tight tracking-tight hover:underline" style="color:var(--color-text)">${escapeHtml(article.title)}</h3></a>
+      <p class="text-base leading-relaxed line-clamp-3" style="color:var(--color-muted)">${escapeHtml(article.subtitle || '')}</p>
+      <div class="flex flex-wrap gap-2">${tagChips(article.tags)}</div>
+      <div class="flex items-center gap-3 flex-wrap text-sm pt-1" style="color:var(--color-muted)">
+        <span>✍️ ${escapeHtml(article.author || config.defaultAuthor || '')}</span>
+        <span aria-hidden="true">•</span>
+        <span>📅 ${formatDate(article.dateCreated)}</span>
+        <span aria-hidden="true">•</span>
+        <span>⏱ ${readingTime(article)}</span>
+      </div>
+      <div>
+        <a href="${articleUrl(article.slug)}" class="inline-flex items-center gap-2 mt-2 px-5 py-2.5 rounded-full text-white text-sm font-bold shadow-sm hover:opacity-90 transition" style="background:var(--color-primary)">Baca artikel →</a>
       </div>
     </div>
   </article>`
@@ -157,26 +195,43 @@ function shell(content) {
   const categories = [...new Set(articles.map((a) => a.category).filter(Boolean))].sort()
   return `
   <div id="progress-bar" class="fixed top-0 left-0 h-1 z-50 transition-all" style="background:var(--color-primary);width:0%"></div>
-  <header class="sticky top-0 z-40 backdrop-blur border-b" style="background:color-mix(in srgb, var(--color-surface) 88%, transparent);border-color:var(--color-border)">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-      <a href="#/" class="flex items-center gap-2 font-extrabold text-lg" style="color:var(--color-text)">
-        <span class="w-9 h-9 rounded-xl flex items-center justify-center text-white text-lg" style="background:var(--color-primary)">W</span>
+  <header class="sticky top-0 z-40 backdrop-blur-md border-b shadow-sm" style="background:color-mix(in srgb, var(--color-surface) 88%, transparent);border-color:var(--color-border)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4">
+      <a href="#/" class="flex items-center gap-2.5 font-extrabold text-lg tracking-tight shrink-0" style="color:var(--color-text)">
+        <span class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg font-extrabold shadow-sm" style="background:linear-gradient(135deg, var(--color-primary), var(--color-secondary))">W</span>
         ${escapeHtml(config.siteTitle)}
       </a>
-      <nav class="hidden md:flex items-center gap-1 ml-4 text-sm">
-        <a href="#/" class="px-3 py-1.5 rounded-lg hover:opacity-75">Beranda</a>
-        ${categories.map((c) => `<a href="#/category/${encodeURIComponent(c)}" class="px-3 py-1.5 rounded-lg hover:opacity-75">${escapeHtml(c)}</a>`).join('')}
+      <nav class="hidden md:flex items-center gap-1 ml-2 text-sm font-medium" style="color:var(--color-muted)">
+        <a href="#/" class="px-3 py-2 rounded-lg hover:opacity-75 hover:bg-black/5 dark:hover:bg-white/10 transition">Beranda</a>
+        ${categories.map((c) => `<a href="#/category/${encodeURIComponent(c)}" class="px-3 py-2 rounded-lg hover:opacity-75 hover:bg-black/5 dark:hover:bg-white/10 transition whitespace-nowrap">${escapeHtml(c)}</a>`).join('')}
       </nav>
       <div class="ml-auto flex items-center gap-2">
-        <button id="theme-toggle" class="w-9 h-9 rounded-full border flex items-center justify-center" style="border-color:var(--color-border)" title="Ganti tema (terang/gelap)">🌙</button>
+        <button id="header-search-btn" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border text-sm font-semibold transition hover:opacity-85" style="border-color:var(--color-border);color:var(--color-text);background:var(--color-surface)">🔍 Cari <kbd class="text-xs px-1.5 py-0.5 rounded border" style="border-color:var(--color-border);color:var(--color-muted)">/</kbd></button>
+        <button id="theme-toggle" class="w-10 h-10 rounded-full border flex items-center justify-center transition hover:opacity-85" style="border-color:var(--color-border);background:var(--color-surface)" title="Ganti tema (terang/gelap)">🌙</button>
       </div>
     </div>
   </header>
-  <main class="max-w-6xl mx-auto px-4 pb-16">${content}</main>
-  <footer class="border-t py-8" style="border-color:var(--color-border)">
-    <div class="max-w-6xl mx-auto px-4 text-sm flex flex-col md:flex-row gap-2 md:items-center justify-between" style="color:var(--color-muted)">
-      <span>© ${new Date().getFullYear()} ${escapeHtml(config.siteTitle)} — ${escapeHtml(config.siteDescription || '')}</span>
-      <span>${articles.length} artikel • Dibangun dengan Vite + TailwindCSS</span>
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">${content}</main>
+  <footer class="border-t mt-4" style="border-color:var(--color-border);background:var(--color-surface)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div class="flex flex-col md:flex-row gap-6 md:items-start justify-between">
+        <div class="max-w-md">
+          <p class="flex items-center gap-2 font-extrabold text-base" style="color:var(--color-text)"><span class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-extrabold" style="background:linear-gradient(135deg, var(--color-primary), var(--color-secondary))">W</span>${escapeHtml(config.siteTitle)}</p>
+          <p class="text-sm mt-3 leading-relaxed" style="color:var(--color-muted)">${escapeHtml(config.siteDescription || '')}</p>
+        </div>
+        <div class="text-sm" style="color:var(--color-muted)">
+          <p class="font-bold mb-2" style="color:var(--color-text)">Kategori</p>
+          <div class="flex flex-col gap-1.5">
+            ${categories.map((c) => `<a href="#/category/${encodeURIComponent(c)}" class="hover:underline">${escapeHtml(c)}</a>`).join('')}
+          </div>
+        </div>
+        <div class="text-sm" style="color:var(--color-muted)">
+          <p class="font-bold mb-2" style="color:var(--color-text)">Tentang Wiki Ini</p>
+          <p>${articles.length} artikel • Semua konten berbasis JSON</p>
+          <p class="mt-1">Dibangun dengan Vite + TailwindCSS</p>
+          <p class="mt-1">© ${new Date().getFullYear()} ${escapeHtml(config.siteTitle)}</p>
+        </div>
+      </div>
     </div>
   </footer>
   <button id="back-to-top" class="fixed bottom-6 right-6 z-40 w-11 h-11 rounded-full text-white shadow-lg hidden items-center justify-center text-xl" style="background:var(--color-primary)" title="Kembali ke atas">↑</button>
@@ -214,40 +269,52 @@ function renderHome() {
   const filterActive = homeState.q || homeState.category || homeState.tag
 
   app.innerHTML = shell(`
-    <section class="py-10 md:py-14 text-center">
-      <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight">${escapeHtml(config.siteTitle)}</h1>
-      <p class="mt-3 text-lg font-semibold" style="color:var(--color-primary)">${escapeHtml(config.siteSubtitle || '')}</p>
-      <p class="mt-2 max-w-2xl mx-auto" style="color:var(--color-muted)">${escapeHtml(config.siteDescription || '')}</p>
-      <div class="mt-6 max-w-xl mx-auto relative">
-        <input id="search-input" type="search" value="${escapeHtml(homeState.q)}" placeholder="Cari artikel… (tekan / untuk fokus)" class="w-full px-5 py-3 rounded-full border text-base outline-none focus:ring-2" style="background:var(--color-surface);border-color:var(--color-border);color:var(--color-text)" />
-        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs px-2 py-0.5 rounded border" style="color:var(--color-muted);border-color:var(--color-border)">/</span>
+    <section class="hero-bg -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-12 pb-10 md:pt-16 md:pb-14 text-center">
+      <p class="inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border" style="border-color:var(--color-border);color:var(--color-primary);background:var(--color-surface)">📚 Wiki Pribadi • Infrastruktur &amp; Observability</p>
+      <h1 class="mt-5 text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.05]"><span class="hero-title-gradient">${escapeHtml(config.siteTitle)}</span></h1>
+      <p class="mt-4 text-xl md:text-2xl font-bold" style="color:var(--color-text)">${escapeHtml(config.siteSubtitle || '')}</p>
+      <p class="mt-3 max-w-2xl mx-auto text-base leading-relaxed" style="color:var(--color-muted)">${escapeHtml(config.siteDescription || '')}</p>
+      <div class="mt-8 max-w-xl mx-auto relative">
+        <span class="absolute left-5 top-1/2 -translate-y-1/2 text-lg pointer-events-none">🔍</span>
+        <input id="search-input" type="search" value="${escapeHtml(homeState.q)}" placeholder="Cari artikel, topik, atau kata kunci…" class="search-input w-full pl-12 pr-12 py-4 rounded-2xl border text-base outline-none shadow-lg transition" style="background:var(--color-surface);border-color:var(--color-border);color:var(--color-text)" />
+        <kbd class="absolute right-4 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded-md border font-sans" style="color:var(--color-muted);border-color:var(--color-border);background:var(--color-background)">/</kbd>
+      </div>
+      <div class="mt-7 flex items-center justify-center gap-3 sm:gap-8 flex-wrap text-sm font-semibold" style="color:var(--color-muted)">
+        <span><strong class="text-lg" style="color:var(--color-text)">${articles.length}</strong> Artikel</span>
+        <span class="hidden sm:inline" aria-hidden="true">•</span>
+        <span><strong class="text-lg" style="color:var(--color-text)">${categories.length}</strong> Kategori</span>
+        <span class="hidden sm:inline" aria-hidden="true">•</span>
+        <span><strong class="text-lg" style="color:var(--color-text)">${allTags.length}</strong> Tag</span>
       </div>
     </section>
 
-    <section class="flex flex-wrap items-center gap-2 mb-4">
+    <section class="flex flex-wrap items-center gap-2 mt-8 mb-5">
       ${chip('Semua', '#/', !homeState.category && !homeState.tag)}
       ${categories.map((c) => chip(c, `#/category/${encodeURIComponent(c)}`, homeState.category === c)).join('')}
-      <select id="sort-select" class="ml-auto px-3 py-1.5 rounded-full border text-sm" style="background:var(--color-surface);border-color:var(--color-border);color:var(--color-text)">
+      <select id="sort-select" class="ml-auto px-3.5 py-2 rounded-full border text-sm font-medium cursor-pointer" style="background:var(--color-surface);border-color:var(--color-border);color:var(--color-text)">
         <option value="newest" ${homeState.sort === 'newest' ? 'selected' : ''}>Terbaru</option>
         <option value="oldest" ${homeState.sort === 'oldest' ? 'selected' : ''}>Terlama</option>
         <option value="title" ${homeState.sort === 'title' ? 'selected' : ''}>Judul A–Z</option>
       </select>
     </section>
 
-    ${homeState.tag ? `<section class="mb-4"><span class="text-sm" style="color:var(--color-muted)">Tag: </span>${chip('#' + homeState.tag, '#/', true)} <a href="#/" class="text-sm underline ml-2">Hapus filter ✕</a></section>` : ''}
-    ${homeState.category ? `<section class="mb-4"><span class="text-sm" style="color:var(--color-muted)">Kategori: <strong>${escapeHtml(homeState.category)}</strong></span> <a href="#/" class="text-sm underline ml-2">Hapus filter ✕</a></section>` : ''}
+    ${homeState.tag ? `<section class="mb-5"><span class="text-sm" style="color:var(--color-muted)">Tag: </span>${chip('#' + homeState.tag, '#/', true)} <a href="#/" class="text-sm underline ml-2">Hapus filter ✕</a></section>` : ''}
+    ${homeState.category ? `<section class="mb-5"><span class="text-sm" style="color:var(--color-muted)">Kategori: <strong>${escapeHtml(homeState.category)}</strong></span> <a href="#/" class="text-sm underline ml-2">Hapus filter ✕</a></section>` : ''}
 
-    <section class="mb-6">
-      <p class="text-sm mb-3" style="color:var(--color-muted)">${list.length} artikel ditemukan ${filterActive ? 'dengan filter aktif' : ''}</p>
-      ${allTags.length ? `<div class="flex flex-wrap gap-1.5">${allTags.map((t) => chip('#' + t, `#/tag/${encodeURIComponent(t)}`, homeState.tag === t)).join('')}</div>` : ''}
+    <section class="mb-8">
+      <p class="text-sm font-semibold mb-3" style="color:var(--color-muted)">${list.length} artikel ditemukan ${filterActive ? 'dengan filter aktif' : ''}</p>
+      ${allTags.length ? `<div class="flex flex-wrap gap-2">${allTags.map((t) => chip('#' + t, `#/tag/${encodeURIComponent(t)}`, homeState.tag === t)).join('')}</div>` : ''}
     </section>
 
-    ${featured ? `<section class="mb-8"><h2 class="text-xl font-bold mb-3">⭐ Artikel Pilihan</h2>${articleCard(featured, true)}</section>` : ''}
+    ${featured ? `<section id="featured-section" class="mb-10">${featuredCard(featured)}</section>` : ''}
 
     <div id="results">
     ${rest.length ? `
-    <section class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      ${rest.map((a) => articleCard(a)).join('')}
+    <section>
+      <h2 class="text-2xl font-extrabold tracking-tight mb-5">Semua Artikel</h2>
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        ${rest.map((a) => articleCard(a)).join('')}
+      </div>
     </section>` : `
     <section class="text-center py-16 rounded-2xl border" style="border-color:var(--color-border)">
       <p class="text-4xl mb-3">🔍</p>
@@ -267,7 +334,10 @@ function resultsHtml(list) {
       <p class="text-sm mt-1" style="color:var(--color-muted)">Coba kata kunci lain, atau <a href="#/" class="underline" style="color:var(--color-primary)">reset semua filter</a>.</p>
     </section>`
   }
-  return `<section class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">${list.map((a) => articleCard(a)).join('')}</section>`
+  return `<section>
+      <h2 class="text-2xl font-extrabold tracking-tight mb-5">Semua Artikel</h2>
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">${list.map((a) => articleCard(a)).join('')}</div>
+    </section>`
 }
 
 function bindHomeEvents() {
@@ -276,8 +346,10 @@ function bindHomeEvents() {
     search.addEventListener('input', () => {
       homeState.q = search.value
       const list = filteredArticles()
-      const count = document.querySelector('section.mb-6 p')
+      const count = document.querySelector('section.mb-8 p')
       if (count) count.textContent = `${list.length} artikel ditemukan dengan filter aktif`
+      const feat = document.getElementById('featured-section')
+      if (feat) feat.style.display = homeState.q.trim() ? 'none' : ''
       const results = document.getElementById('results')
       if (results) results.innerHTML = resultsHtml(list)
     })
@@ -344,8 +416,8 @@ function renderArticle(slug) {
   app.innerHTML = shell(`
     <article class="pt-6">
       <a href="#/" class="text-sm font-semibold no-print" style="color:var(--color-primary)">← Semua Artikel</a>
-      <div class="mt-4 rounded-2xl overflow-hidden border" style="border-color:var(--color-border)">
-        ${cardImage(article, 'w-full h-64 md:h-80 object-cover')}
+      <div class="mt-4 rounded-2xl overflow-hidden border shadow-sm" style="border-color:var(--color-border)">
+        ${cardImage(article, 'w-full h-56 sm:h-72 md:h-96 object-cover')}
       </div>
       <div class="mt-6 lg:flex lg:gap-10">
         <div class="flex-1 min-w-0">
@@ -361,9 +433,9 @@ function renderArticle(slug) {
             ${article.dateUpdated ? `<span>🔄 Diperbarui ${formatDate(article.dateUpdated)}</span>` : ''}
             <span>⏱ ${readingTime(article)}</span>
           </div>
-          <div class="flex flex-wrap gap-1.5 mt-4">${tagChips(article.tags)}</div>
+          <div class="flex flex-wrap gap-2 mt-4">${tagChips(article.tags)}</div>
 
-          <div class="article-body mt-6">
+          <div class="article-body mt-6 max-w-3xl">
             ${renderBlocks(article.blocks)}
           </div>
 
@@ -385,9 +457,9 @@ function renderArticle(slug) {
           </nav>
         </div>
 
-        ${headings.length ? `<aside id="toc" class="hidden lg:block w-64 shrink-0 no-print">
-          <div class="sticky top-24">
-            <p class="font-bold text-sm mb-2 px-2">📑 Daftar Isi</p>
+        ${headings.length ? `<aside id="toc" class="hidden lg:block w-72 shrink-0 no-print">
+          <div class="sticky top-24 rounded-2xl border p-4 shadow-sm" style="border-color:var(--color-border);background:var(--color-surface)">
+            <p class="font-bold text-sm mb-3 px-2">📑 Daftar Isi</p>
             <nav class="space-y-0.5">
               ${headings.map((h) => `<a href="#${h.id}" data-toc="${h.id}" class="toc-link ${h.level === 3 ? 'l3' : ''}">${escapeHtml(h.text)}</a>`).join('')}
             </nav>
@@ -478,6 +550,18 @@ document.addEventListener('click', async (e) => {
   const themeBtn = e.target.closest('#theme-toggle')
   if (themeBtn) {
     toggleTheme()
+    return
+  }
+  const searchBtn = e.target.closest('#header-search-btn')
+  if (searchBtn) {
+    const search = document.getElementById('search-input')
+    if (search) {
+      search.focus()
+      search.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else {
+      location.hash = '#/'
+      setTimeout(() => document.getElementById('search-input')?.focus(), 80)
+    }
     return
   }
   const btt = e.target.closest('#back-to-top')
