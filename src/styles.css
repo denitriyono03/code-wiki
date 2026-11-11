@@ -198,6 +198,10 @@ body {
   overflow-x: auto;
   font-size: 0.85rem;
   line-height: 1.6;
+  /* Base text color must be light: highlight.js only colors its own
+     token spans; plain (unwrapped) code inherits this color. Without it,
+     code renders dark-on-dark and is unreadable. */
+  color: #c9d1d9;
 }
 .codeblock pre code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
