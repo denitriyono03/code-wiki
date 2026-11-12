@@ -236,6 +236,24 @@ body {
   font-size: 0.82rem;
 }
 
+/* ---------- Sidebar tree ---------- */
+.tree-chevron {
+  display: inline-block;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+.tree-chevron.open {
+  transform: rotate(90deg);
+}
+#sidebar {
+  transition: transform 0.3s ease;
+}
+#sidebar nav {
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
 /* ---------- Misc ---------- */
 .line-clamp-2 {
   display: -webkit-box;
@@ -259,6 +277,8 @@ body {
   #progress-bar,
   #back-to-top,
   #toc,
+  #sidebar,
+  #sidebar-backdrop,
   .no-print {
     display: none !important;
   }

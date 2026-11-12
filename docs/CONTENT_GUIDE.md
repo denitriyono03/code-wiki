@@ -17,6 +17,8 @@ Setiap artikel adalah **satu file JSON** di `src/content/`. Nama file bebas, tap
   "category": "Observability",
   "tags": ["tag-satu", "tag-dua"],
   "difficulty": "Pemula",
+  "parent": null,
+  "order": 1,
   "source": { "label": "Nama Dokumentasi", "url": "https://docs.example.com" },
   "blocks": [ ... ],
   "related": ["slug-artikel-lain", "slug-artikel-lainnya"]
@@ -36,9 +38,47 @@ Setiap artikel adalah **satu file JSON** di `src/content/`. Nama file bebas, tap
 | `category` | Ya | Satu kategori, mis. `Observability`, `Web Server`, `Platform`. |
 | `tags` | Ya | Array string, bisa diklik untuk filter. |
 | `difficulty` | Ya | Salah satu: `"Pemula"`, `"Menengah"`, `"Lanjutan"`. |
+| `parent` | Tidak | Slug artikel induk (`null` atau diisi slug yang sudah ada) — menempatkan artikel ini sebagai anak di sidebar tree. Lihat "Struktur tree" di bawah. |
+| `order` | Tidak | Angka urutan di antara saudara kandung (level yang sama, induk yang sama). Angka kecil tampil dulu; kalau kosong, diurutkan setelah yang bernomor, lalu alfabetis. |
 | `source` | Tidak | `{ label, url }` — sumber utama, ditampilkan di akhir artikel. |
 | `blocks` | Ya | Isi artikel (lihat di bawah). |
 | `related` | Tidak | Array slug artikel terkait (maks. 3 ditampilkan). Kalau kurang, aplikasi otomatis mengisi dari kategori/tag yang sama. |
+
+## Struktur tree (sidebar) — maksimal 3 tingkat bersarang
+
+Sidebar menampilkan artikel sebagai tree:
+
+```
+Level 1 — Kategori (mis. Web Server)          ← grup, bisa dilipat
+  Artikel tingkat 1 — Induk (mis. NGINX)      ← parent: null
+    Artikel tingkat 2 — Turunan (mis. Reverse Proxy)
+      Artikel tingkat 3 — Turunan dari turunan (mis. Rate Limiting)
+```
+
+Aturan:
+
+- **Level 1** adalah kategori — otomatis dari field `category` artikel induk.
+- **Artikel tingkat 1** adalah artikel dengan `parent: null` (atau tanpa field `parent`).
+- **Artikel tingkat 2** adalah artikel dengan `parent` berisi slug artikel tingkat 1 yang sudah ada. Contoh: artikel `nginx-reverse-proxy` punya `"parent": "nginx"`.
+- **Artikel tingkat 3** adalah artikel dengan `parent` berisi slug artikel tingkat 2 yang sudah ada. Contoh: artikel `nginx-rate-limit` punya `"parent": "nginx-reverse-proxy"`.
+- **Maksimal 3 tingkat bersarang.** Artikel tingkat 3 **tidak boleh** punya anak — jangan mengisi `parent` dengan slug artikel tingkat 3. Kalau itu tetap terjadi, sidebar tetap menampilkannya (kode mendukung kedalaman berapa pun), tapi struktur jadi sulit dinavigasi.
+- `parent` harus berisi slug yang sudah ada. Slug yang tidak ditemukan dianggap tidak punya induk (diperlakukan sebagai artikel tingkat 1).
+- `order` mengatur urutan di antara saudara kandung. Contoh: dua anak NGINX, `"order": 1` tampil sebelum `"order": 2`.
+
+Contoh — rantai NGINX yang sudah ada di wiki ini:
+
+```json
+// src/content/nginx.json
+{ "slug": "nginx", "parent": null, "order": 1, "category": "Web Server", ... }
+
+// src/content/nginx-reverse-proxy.json
+{ "slug": "nginx-reverse-proxy", "parent": "nginx", "order": 1, ... }
+
+// src/content/nginx-rate-limit.json
+{ "slug": "nginx-rate-limit", "parent": "nginx-reverse-proxy", "order": 1, ... }
+```
+
+Breadcrumb di halaman artikel mengikuti rantai yang sama, mis. `Beranda / Web Server / NGINX / Reverse Proxy`.
 
 ## Tipe blok
 
@@ -140,6 +180,8 @@ Sel header dan isi mendukung format inline.
   "category": "Observability",
   "tags": ["contoh", "template"],
   "difficulty": "Pemula",
+  "parent": null,
+  "order": 1,
   "source": { "label": "Dokumentasi Resmi", "url": "https://example.com/docs" },
   "blocks": [
     { "type": "paragraph", "text": "Paragraf pembuka dengan **tebal**, `kode inline`, [tautan](https://example.com), dan ==highlight==." },

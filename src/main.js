@@ -189,6 +189,143 @@ function featuredCard(article) {
 }
 
 // ---------------------------------------------------------------------------
+// Sidebar tree (3 levels: category → article → child article)
+// ---------------------------------------------------------------------------
+const expandedCats = new Set()
+const expandedParents = new Set()
+let sidebarOpen = false
+let activeSlug = null
+
+function sortSiblings(list) {
+  return [...list].sort(
+    (a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.title.localeCompare(b.title, 'id'),
+  )
+}
+
+function treeData() {
+  const bySlug = new Map(articles.map((a) => [a.slug, a]))
+  const childrenOf = new Map()
+  for (const a of articles) {
+    if (a.parent && bySlug.has(a.parent)) {
+      if (!childrenOf.has(a.parent)) childrenOf.set(a.parent, [])
+      childrenOf.get(a.parent).push(a)
+    }
+  }
+  const roots = articles.filter((a) => !a.parent || !bySlug.has(a.parent))
+  const categories = [...new Set(roots.map((a) => a.category).filter(Boolean))].sort()
+  return { bySlug, childrenOf, roots, categories }
+}
+
+function initTreeState() {
+  const { categories, childrenOf } = treeData()
+  for (const c of categories) expandedCats.add(c)
+  for (const slug of childrenOf.keys()) expandedParents.add(slug)
+}
+
+/** Parent chain of an article, top-down (excluding the article itself). */
+function ancestorsOf(article) {
+  const { bySlug } = treeData()
+  const chain = []
+  const seen = new Set()
+  let cur = article
+  while (cur && cur.parent && bySlug.get(cur.parent) && !seen.has(cur.slug)) {
+    seen.add(cur.slug)
+    cur = bySlug.get(cur.parent)
+    chain.unshift(cur)
+  }
+  return chain
+}
+
+function ensureAncestorsOpen(article) {
+  if (!article) return
+  expandedCats.add(article.category)
+  for (const anc of ancestorsOf(article)) expandedParents.add(anc.slug)
+}
+
+function treeLinkHtml(a, level) {
+  const active = a.slug === activeSlug
+  const size = level === 3 ? 'text-[13px]' : 'text-sm'
+  const style = active
+    ? 'background:color-mix(in srgb, var(--color-primary) 14%, transparent);color:var(--color-primary);font-weight:700'
+    : 'color:var(--color-text)'
+  return `<a href="${articleUrl(a.slug)}" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg ${size} truncate hover:opacity-80 transition" style="${style}" title="${escapeHtml(a.title)}">${escapeHtml(a.title)}</a>`
+}
+
+function treeInnerHtml() {
+  const { childrenOf, roots, categories } = treeData()
+  const countInCategory = (c) => {
+    let n = 0
+    const walk = (a) => {
+      n++
+      for (const k of childrenOf.get(a.slug) || []) walk(k)
+    }
+    for (const r of roots.filter((a) => a.category === c)) walk(r)
+    return n
+  }
+  // Recursive: renders children at any depth (data guide caps nesting at 3
+  // article levels, but the code itself does not hard-stop deeper trees).
+  const nodeHtml = (a, depth) => {
+    const kids = sortSiblings(childrenOf.get(a.slug) || [])
+    const hasKids = kids.length > 0
+    const open = expandedParents.has(a.slug)
+    return `<div class="mb-0.5">
+      <div class="flex items-center gap-0.5 rounded-lg">
+        ${hasKids ? `<button data-toggle-parent="${escapeHtml(a.slug)}" class="w-6 h-6 shrink-0 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition" aria-label="Tampilkan turunan" aria-expanded="${open}"><span class="tree-chevron ${open ? 'open' : ''}">▸</span></button>` : `<span class="w-6 shrink-0" aria-hidden="true"></span>`}
+        ${treeLinkHtml(a, depth)}
+        ${hasKids ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 mr-1" style="background:color-mix(in srgb, var(--color-primary) 12%, transparent);color:var(--color-primary)">${kids.length}</span>` : ''}
+      </div>
+      ${hasKids ? `<div class="${open ? '' : 'hidden'} ml-3 pl-2 border-l" style="border-color:var(--color-border)">${kids.map((k) => nodeHtml(k, depth + 1)).join('')}</div>` : ''}
+    </div>`
+  }
+  return categories
+    .map((c) => {
+      const catOpen = expandedCats.has(c)
+      const tops = sortSiblings(roots.filter((a) => a.category === c))
+      return `<div class="mb-1">
+        <button data-toggle-cat="${escapeHtml(c)}" class="w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold text-left transition hover:opacity-80" style="color:var(--color-text)" aria-expanded="${catOpen}">
+          <span class="tree-chevron ${catOpen ? 'open' : ''}">▸</span>
+          <span class="flex-1 min-w-0 truncate">${escapeHtml(c)}</span>
+          <span class="text-[11px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style="background:color-mix(in srgb, var(--color-primary) 12%, transparent);color:var(--color-primary)">${countInCategory(c)}</span>
+        </button>
+        <div class="${catOpen ? '' : 'hidden'}">
+          ${tops.map((a) => nodeHtml(a, 2)).join('')}
+        </div>
+      </div>`
+    })
+    .join('')
+}
+
+function renderSidebarTree() {
+  const nav = document.getElementById('sidebar-tree')
+  if (nav) nav.innerHTML = treeInnerHtml()
+}
+
+function setSidebarOpen(open) {
+  sidebarOpen = open
+  const sb = document.getElementById('sidebar')
+  const bd = document.getElementById('sidebar-backdrop')
+  if (sb) {
+    sb.classList.toggle('-translate-x-full', !open)
+    sb.classList.toggle('translate-x-0', open)
+  }
+  if (bd) bd.classList.toggle('hidden', !open)
+  document.body.style.overflow = open && window.innerWidth < 1024 ? 'hidden' : ''
+}
+
+function sidebarHtml() {
+  return `
+  <aside id="sidebar" class="fixed z-40 lg:z-30 top-0 lg:top-[65px] bottom-0 left-0 w-72 flex flex-col border-r shadow-xl lg:shadow-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0" style="background:var(--color-surface);border-color:var(--color-border)">
+    <div class="flex items-center justify-between pl-4 pr-3 pt-4 pb-3 border-b shrink-0" style="border-color:var(--color-border)">
+      <p class="font-extrabold text-sm tracking-wide" style="color:var(--color-text)">📚 Daftar Konten</p>
+      <button id="sidebar-close" class="lg:hidden w-8 h-8 rounded-full flex items-center justify-center text-lg transition hover:bg-black/5 dark:hover:bg-white/10" style="color:var(--color-muted)" aria-label="Tutup sidebar">✕</button>
+    </div>
+    <nav id="sidebar-tree" class="flex-1 overflow-y-auto px-3 py-3">${treeInnerHtml()}</nav>
+  </aside>
+  <div id="sidebar-backdrop" class="${sidebarOpen ? '' : 'hidden'} lg:hidden fixed inset-0 z-30 bg-black/50"></div>
+  `
+}
+
+// ---------------------------------------------------------------------------
 // Layout shell
 // ---------------------------------------------------------------------------
 function shell(content) {
@@ -197,6 +334,7 @@ function shell(content) {
   <div id="progress-bar" class="fixed top-0 left-0 h-1 z-50 transition-all" style="background:var(--color-primary);width:0%"></div>
   <header class="sticky top-0 z-40 backdrop-blur-md border-b shadow-sm" style="background:color-mix(in srgb, var(--color-surface) 88%, transparent);border-color:var(--color-border)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4">
+      <button id="sidebar-toggle" class="lg:hidden w-10 h-10 rounded-full border flex items-center justify-center text-lg transition hover:opacity-85 shrink-0" style="border-color:var(--color-border);background:var(--color-surface);color:var(--color-text)" aria-label="Buka daftar konten">☰</button>
       <a href="#/" class="flex items-center gap-2.5 font-extrabold text-lg tracking-tight shrink-0" style="color:var(--color-text)">
         <span class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg font-extrabold shadow-sm" style="background:linear-gradient(135deg, var(--color-primary), var(--color-secondary))">W</span>
         ${escapeHtml(config.siteTitle)}
@@ -211,6 +349,8 @@ function shell(content) {
       </div>
     </div>
   </header>
+  ${sidebarHtml()}
+  <div class="lg:pl-72">
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">${content}</main>
   <footer class="border-t mt-4" style="border-color:var(--color-border);background:var(--color-surface)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -234,6 +374,7 @@ function shell(content) {
       </div>
     </div>
   </footer>
+  </div>
   <button id="back-to-top" class="fixed bottom-6 right-6 z-40 w-11 h-11 rounded-full text-white shadow-lg hidden items-center justify-center text-xl" style="background:var(--color-primary)" title="Kembali ke atas">↑</button>
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-white text-sm font-semibold shadow-lg opacity-0 pointer-events-none" style="background:var(--color-secondary)">Disalin!</div>
   `
@@ -312,7 +453,7 @@ function renderHome() {
     ${rest.length ? `
     <section>
       <h2 class="text-2xl font-extrabold tracking-tight mb-5">Semua Artikel</h2>
-      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         ${rest.map((a) => articleCard(a)).join('')}
       </div>
     </section>` : `
@@ -336,7 +477,7 @@ function resultsHtml(list) {
   }
   return `<section>
       <h2 class="text-2xl font-extrabold tracking-tight mb-5">Semua Artikel</h2>
-      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">${list.map((a) => articleCard(a)).join('')}</div>
+      <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">${list.map((a) => articleCard(a)).join('')}</div>
     </section>`
 }
 
@@ -406,16 +547,23 @@ function renderArticle(slug) {
     return
   }
   currentArticle = article
+  ensureAncestorsOpen(article)
   const headings = collectHeadings(article.blocks)
   const idx = articles.findIndex((a) => a.slug === slug)
   const prev = articles[idx + 1] || null
   const next = articles[idx - 1] || null
   const related = relatedArticles(article)
   const source = article.source || {}
+  const chain = ancestorsOf(article)
 
   app.innerHTML = shell(`
     <article class="pt-6">
-      <a href="#/" class="text-sm font-semibold no-print" style="color:var(--color-primary)">← Semua Artikel</a>
+      <nav class="text-sm no-print flex flex-wrap items-center gap-x-1.5 gap-y-1" aria-label="Breadcrumb" style="color:var(--color-muted)">
+        <a href="#/" class="hover:underline">Beranda</a><span aria-hidden="true">/</span>
+        <a href="#/category/${encodeURIComponent(article.category || '')}" class="hover:underline">${escapeHtml(article.category || '')}</a><span aria-hidden="true">/</span>
+        ${chain.map((a) => `<a href="${articleUrl(a.slug)}" class="hover:underline">${escapeHtml(a.title)}</a><span aria-hidden="true">/</span>`).join('')}
+        <span class="font-semibold" style="color:var(--color-text)">${escapeHtml(article.title)}</span>
+      </nav>
       <div class="mt-4 rounded-2xl overflow-hidden border shadow-sm" style="border-color:var(--color-border)">
         ${cardImage(article, 'w-full h-56 sm:h-72 md:h-96 object-cover')}
       </div>
@@ -446,7 +594,7 @@ function renderArticle(slug) {
 
           ${related.length ? `<section class="mt-10">
             <h2 class="text-2xl font-bold mb-4">🔗 Konten Terkait</h2>
-            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
               ${related.map((a) => articleCard(a)).join('')}
             </div>
           </section>` : ''}
@@ -457,7 +605,7 @@ function renderArticle(slug) {
           </nav>
         </div>
 
-        ${headings.length ? `<aside id="toc" class="hidden lg:block w-72 shrink-0 no-print">
+        ${headings.length ? `<aside id="toc" class="hidden xl:block w-72 shrink-0 no-print">
           <div class="sticky top-24 rounded-2xl border p-4 shadow-sm" style="border-color:var(--color-border);background:var(--color-surface)">
             <p class="font-bold text-sm mb-3 px-2">📑 Daftar Isi</p>
             <nav class="space-y-0.5">
@@ -523,6 +671,30 @@ function showToast(msg) {
 }
 
 document.addEventListener('click', async (e) => {
+  const toggleCat = e.target.closest('[data-toggle-cat]')
+  if (toggleCat) {
+    const c = toggleCat.dataset.toggleCat
+    if (expandedCats.has(c)) expandedCats.delete(c)
+    else expandedCats.add(c)
+    renderSidebarTree()
+    return
+  }
+  const toggleParent = e.target.closest('[data-toggle-parent]')
+  if (toggleParent) {
+    const s = toggleParent.dataset.toggleParent
+    if (expandedParents.has(s)) expandedParents.delete(s)
+    else expandedParents.add(s)
+    renderSidebarTree()
+    return
+  }
+  if (e.target.closest('#sidebar-toggle')) {
+    setSidebarOpen(true)
+    return
+  }
+  if (e.target.closest('#sidebar-close') || e.target.closest('#sidebar-backdrop')) {
+    setSidebarOpen(false)
+    return
+  }
   const copyBtn = e.target.closest('.copy-btn')
   if (copyBtn && currentArticle) {
     const idx = Number(copyBtn.dataset.codeIndex)
@@ -571,6 +743,10 @@ document.addEventListener('click', async (e) => {
 })
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && sidebarOpen) {
+    setSidebarOpen(false)
+    return
+  }
   if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) {
     const search = document.getElementById('search-input')
     if (search) {
@@ -592,21 +768,30 @@ function route() {
   const [page, param] = parts
 
   window.scrollTo({ top: 0 })
+  // Navigating closes the mobile drawer (desktop sidebar stays visible).
+  if (window.innerWidth < 1024 && sidebarOpen) {
+    sidebarOpen = false
+    document.body.style.overflow = ''
+  }
   const btt = document.getElementById('back-to-top')
   if (btt) btt.classList.add('hidden')
 
   if (page === 'article' && param) {
     homeState.q = ''
+    activeSlug = decodeURIComponent(param)
     renderArticle(decodeURIComponent(param))
   } else if (page === 'tag' && param) {
+    activeSlug = null
     homeState.tag = decodeURIComponent(param)
     homeState.category = ''
     renderHome()
   } else if (page === 'category' && param) {
+    activeSlug = null
     homeState.category = decodeURIComponent(param)
     homeState.tag = ''
     renderHome()
   } else {
+    activeSlug = null
     homeState.category = ''
     homeState.tag = ''
     renderHome()
@@ -621,6 +806,7 @@ window.addEventListener('hashchange', route)
 // ---------------------------------------------------------------------------
 async function boot() {
   loadArticles()
+  initTreeState()
   await loadConfig()
   applyTheme()
   route()
